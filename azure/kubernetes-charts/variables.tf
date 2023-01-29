@@ -33,6 +33,14 @@ variable "grafana_oauth_client_secret" {
   default = "grafana-oauth-client-secret"
 }
 
+variable "grafana_ms_auth_url" {
+
+}
+
+variable "grafana_ms_token_url" {
+
+}
+
 variable "enable_prometheus" {
   default = true
 }

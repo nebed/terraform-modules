@@ -40,6 +40,8 @@ resource "helm_release" "prometheus_operator" {
       grafana_admin_password      = var.enable_grafana ? random_password.grafana_password[0].result : ""
       grafana_oauth_client_id     = data.azurerm_key_vault_secret.grafana_oauth_client_id.value
       grafana_oauth_client_secret = data.azurerm_key_vault_secret.grafana_oauth_client_secret.value
+      grafana_ms_auth_url         = var.grafana_ms_auth_url
+      grafana_ms_token_url        = var.grafana_ms_token_url
       internal_dns_zone           = var.internal_dns_zone
       load_balancer_subnet        = var.internal_lb_subnet
     }),
