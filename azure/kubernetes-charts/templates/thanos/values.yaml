@@ -1,0 +1,93 @@
+objstoreConfig: |-
+  type: AZURE
+  config:
+    storage_account: ${storage_account_name}
+    container: thanos
+    msi_resource: "https://${storage_account_name}.blob.core.windows.net"
+
+image:
+  registry: docker.io
+  repository: bitnami/thanos
+  tag: 0.24.0
+
+query:
+  ingress:
+    enabled: true
+    ingressClassName: "ingress-nginx-internal"
+    hostname: thanos-query.${internal_dns_zone}
+    path: /
+    pathType: ImplementationSpecific
+    extraHosts:
+      - name: thanos-query.${internal_dns_zone}
+        path: /
+        pathType: ImplementationSpecific
+    extraTls:
+      - hosts:
+          - thanos-query.${internal_dns_zone}
+  extraFlags:
+    - --grpc-client-tls-secure
+
+  stores:
+  %{ for k, v in thanosstores }
+    - ${v}:443
+  %{ endfor }
+    - thanos-storegateway.${cluster_name}.${internal_dns_zone}:443
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+      service.beta.kubernetes.io/azure-load-balancer-internal-subnet: ${load_balancer_subnet}
+queryFrontend:
+  ingress:
+    enabled: true
+    ingressClassName: "ingress-nginx-internal"
+    hostname: thanos.${internal_dns_zone}
+    path: /
+    pathType: ImplementationSpecific
+    extraHosts:
+      - name: thanos.${internal_dns_zone}
+        path: /
+        pathType: ImplementationSpecific
+    extraTls:
+      - hosts:
+          - thanos.${internal_dns_zone}
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+      service.beta.kubernetes.io/azure-load-balancer-internal-subnet: ${load_balancer_subnet}
+bucketweb:
+  enabled: true
+compactor:
+  enabled: true
+  persistence:
+    size: 20Gi
+  retentionResolutionRaw: 30d
+  retentionResolution5m: 30d
+  retentionResolution1h: 10y 
+storegateway:
+  enabled: true
+  persistence:
+    size: 20Gi
+  ingress:
+    grpc:
+      enabled: true
+      ingressClassName: "ingress-nginx-internal"
+      annotations:
+        nginx.ingress.kubernetes.io/ssl-redirect: "true"
+        nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+      hostname: thanos-storegateway.${cluster_name}.${internal_dns_zone}
+      path: /
+      pathType: ImplementationSpecific
+      extraTls:
+        - hosts:
+            - thanos-storegateway.${cluster_name}.${internal_dns_zone}
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
+
+
+
+

@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ${name}
+spec:
+  dnsNames:
+  - '*.${domain}'
+  - '*.${base_domain}'
+  issuerRef:
+    name: ${issuer}
+    kind: Issuer
+  secretName: ${name}

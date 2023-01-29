@@ -1,0 +1,253 @@
+defaultRules:
+  create: false
+  rules:
+    alertmanager: true
+    etcd: false
+    general: true
+    k8s: true
+    kubeApiserver: false
+    kubeApiserverAvailability: true
+    kubeApiserverError: true
+    kubeApiserverSlos: true
+    kubelet: false
+    kubePrometheusGeneral: true
+    kubePrometheusNodeAlerting: true
+    kubePrometheusNodeRecording: true
+    kubernetesAbsent: true
+    kubernetesApps: true
+    kubernetesResources: true
+    kubernetesStorage: true
+    kubernetesSystem: true
+    kubeScheduler: false
+    kubeStateMetrics: true
+    network: true
+    node: true
+    prometheus: true
+    prometheusOperator: true
+    time: true
+
+  appNamespacesTarget: ".*"
+
+alertmanager:
+  enabled: true
+  config:
+    global:
+      resolve_timeout: 5m
+      http_config: {}
+      smtp_hello: localhost
+      smtp_require_tls: true
+      pagerduty_url: "https://events.pagerduty.com/v2/enqueue"
+      opsgenie_api_url: "https://api.opsgenie.com/"
+      wechat_api_url: "https://qyapi.weixin.qq.com/cgi-bin/"
+      victorops_api_url: "https://alert.victorops.com/integrations/generic/20131114/alert/"
+    route:
+      group_by: ['namespace']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'null'
+      routes:
+      - receiver: 'null'
+        matchers:
+          - alertname =~ "InfoInhibitor|Watchdog"
+    receivers:
+    - name: 'null'
+
+  ingress:
+    enabled: true
+    ingressClassName: "ingress-nginx-internal"
+    hosts: ['alertmanager.${cluster_name}.${internal_dns_zone}']
+
+    paths: []
+    pathType: ImplementationSpecific
+    tls:
+    - hosts:
+        - alertmanager.${cluster_name}.${internal_dns_zone}
+
+
+## Using default values from https://github.com/grafana/helm-charts/blob/main/charts/grafana/values.yaml
+##
+grafana:
+  enabled: ${deploy_grafana}
+  adminPassword: ${grafana_admin_password}
+
+  persistence:
+    enabled: true
+  grafana.ini:
+    paths:
+      data: /var/lib/grafana/
+      logs: /var/log/grafana
+      plugins: /var/lib/grafana/plugins
+      provisioning: /etc/grafana/provisioning
+    analytics:
+      check_for_updates: true
+    log:
+      mode: console
+    grafana_net:
+      url: https://grafana.net
+    server:
+        # The full public facing url you use in browser, used for redirects and emails
+      domain: "grafana.${internal_dns_zone}"
+      root_url: "https://grafana.${internal_dns_zone}"
+    auth.azuread:
+      name: Azure AD
+      enabled: true
+      allow_sign_up: true
+      client_id: ${grafana_oauth_client_id}
+      client_secret: ${grafana_oauth_client_secret}
+      scopes: openid email profile
+      auth_url: https://login.microsoftonline.com/0cc4f6a9-d96a-4508-b938-32386e1c44cf/oauth2/v2.0/authorize
+      token_url: https://login.microsoftonline.com/0cc4f6a9-d96a-4508-b938-32386e1c44cf/oauth2/v2.0/token
+      allowed_domains:
+      allowed_groups:
+      role_attribute_strict: false
+      allow_assign_grafana_admin: true
+
+  ingress:
+    enabled: true
+    ingressClassName: ingress-nginx-internal
+    hosts: ['grafana.${internal_dns_zone}']
+
+    ## Path for grafana ingress
+    path: /
+    pathType: ImplementationSpecific
+
+    ## TLS configuration for grafana Ingress
+    ## Secret must be manually created in the namespace
+    ##
+    tls:
+    - hosts:
+        - grafana.${internal_dns_zone}
+
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: true
+      label: grafana_datasource
+      uid: prometheus
+      url: https://thanos.${internal_dns_zone}/
+
+
+coreDns:
+  enabled: true
+  service:
+    port: 9153
+    targetPort: 9153
+
+kubeStateMetrics:
+  enabled: true
+
+kube-state-metrics:
+  rbac:
+    create: true
+  podSecurityPolicy:
+    enabled: true
+
+nodeExporter:
+  enabled: true
+  jobLabel: jobLabel
+
+prometheus-node-exporter:
+  podLabels:
+    jobLabel: node-exporter
+  extraArgs:
+    - --collector.filesystem.ignored-mount-points=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
+    - --collector.filesystem.ignored-fs-types=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$
+
+prometheusOperator:
+  enabled: true
+  tls:
+    enabled: true
+    tlsMinVersion: VersionTLS13
+    internalPort: 10250
+  admissionWebhooks:
+    failurePolicy: Fail
+    enabled: true
+    caBundle: ""
+
+  createCustomResource: true
+  cleanupCustomResource: false
+
+  resources: {}
+  # limits:
+  #   cpu: 200m
+  #   memory: 200Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 100Mi
+
+  # Required for use in managed kubernetes clusters (such as AWS EKS) with custom CNI (such as calico),
+  # because control-plane managed by AWS cannot communicate with pods' IP CIDR and admission webhooks are not working
+  ##
+  hostNetwork: false
+
+
+prometheus:
+  enabled: true
+
+  prometheusSpec:
+    thanos:
+      image: docker.io/bitnami/thanos:0.24.0
+      version: v0.24.0
+      objectStorageConfig:
+        key: objstore.yml
+        name: thanos-objstore-secret
+    retention: 14d
+    externalLabels:
+      cluster: "${cluster_name}"
+
+  thanosService:
+    enabled: true
+    annotations: {}
+    labels: {}
+    portName: grpc
+    port: 10901
+    targetPort: "grpc"
+    clusterIP: "None"
+
+    ## Service type
+    ##
+    type: ClusterIP
+
+    ## Port to expose on each node
+    ##
+    nodePort: 30901
+
+  thanosServiceExternal:
+    enabled: true
+    annotations:
+      service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+      service.beta.kubernetes.io/azure-load-balancer-internal-subnet: ${load_balancer_subnet}
+    portName: grpc
+    port: 10901
+    targetPort: "grpc"
+    type: LoadBalancer
+    nodePort: 30901
+
+  thanosIngress:
+    enabled: true
+    ingressClassName: ingress-nginx-internal
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    labels: {}
+    servicePort: 10901
+    hosts: ['thanos.${cluster_name}.${internal_dns_zone}']
+    paths: []
+    pathType: ImplementationSpecific
+    tls:
+    - hosts:
+        - thanos.${cluster_name}.${internal_dns_zone}
+
+  ingress:
+    enabled: true
+    ingressClassName: ingress-nginx-internal
+    hosts: ['prometheus.${cluster_name}.${internal_dns_zone}']
+    paths: []
+    pathType: ImplementationSpecific
+    tls:
+    - hosts:
+        - prometheus.${cluster_name}.${internal_dns_zone}

@@ -1,0 +1,22 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: ${name}
+spec:
+  acme:
+    server: ${server}
+    email: ${email}
+    privateKeySecretRef:
+      name: ${secret_name}
+    solvers:
+    - dns01:
+        webhook:
+          groupName: ${group_name}
+          solverName: dnsmadeeasy
+          config:
+            apiKeyRef:
+              name: dnsmadeeasy-api-key
+              key: key
+            apiSecretRef:
+              name: dnsmadeeasy-api-key
+              key: secret
